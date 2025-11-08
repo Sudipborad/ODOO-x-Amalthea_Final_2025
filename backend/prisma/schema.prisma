@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  name        String
+  email       String    @unique
+  password    String?   // null until user sets password (invited users)
+  role        Role      @default(EMPLOYEE)
+  isVerified  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  employee    Employee?
+  EmailTokens EmailToken[]
+  EmailLogs   EmailLog[]
+}
+
+enum Role {
+  ADMIN
+  HR
+  PAYROLL
+  EMPLOYEE
+}
+
+model Employee {
+  id                        Int         @id @default(autoincrement())
+  userId                    Int         @unique
+  employeeCode              String
+  department                String
+  designation               String
+  baseSalary                Float
+  allowances                Float       @default(0)
+  pfApplicable              Boolean     @default(true)
+  professionalTaxApplicable Boolean     @default(true)
+  joinDate                  DateTime
+  bankAccountMasked         String?
+  attendance                Attendance[]
+  timeOff                   TimeOff[]
+  payrunLines               PayrunLine[]
+  user                      User        @relation(fields: [userId], references: [id])
+  createdAt                 DateTime    @default(now())
+  updatedAt                 DateTime    @updatedAt
+}
+
+model Attendance {
+  id         Int       @id @default(autoincrement())
+  employeeId Int
+  date       DateTime
+  checkIn    DateTime?
+  checkOut   DateTime?
+  totalHours Float?
+  status     String
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  createdAt  DateTime  @default(now())
+
+  @@unique([employeeId, date])
+}
+
+model TimeOff {
+  id         Int       @id @default(autoincrement())
+  employeeId Int
+  fromDate   DateTime
+  toDate     DateTime
+  type       String
+  reason     String
+  status     String    @default("PENDING") // PENDING/APPROVED/REJECTED
+  approverId Int?      // user id of approver (HR or Payroll)
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  createdAt  DateTime  @default(now())
+}
+
+model Payrun {
+  id              Int         @id @default(autoincrement())
+  periodStart     DateTime
+  periodEnd       DateTime
+  status          String      @default("DRAFT") // DRAFT / FINALIZED
+  createdBy       Int
+  payrunLines     PayrunLine[]
+  totalGross      Float?
+  totalDeductions Float?
+  totalNet        Float?
+  createdAt       DateTime    @default(now())
+}
+
+model PayrunLine {
+  id              Int      @id @default(autoincrement())
+  payrunId        Int
+  employeeId      Int
+  gross           Float
+  unpaidDeduction Float
+  pfEmployee      Float
+  professionalTax Float
+  otherDeductions Float
+  net             Float
+  remarks         String?
+  payrun          Payrun   @relation(fields: [payrunId], references: [id])
+  employee        Employee @relation(fields: [employeeId], references: [id])
+  payslip         Payslip?
+}
+
+model Payslip {
+  id           Int        @id @default(autoincrement())
+  payrunLineId Int        @unique
+  filePath     String
+  generatedAt  DateTime   @default(now())
+  payrunLine   PayrunLine @relation(fields: [payrunLineId], references: [id])
+}
+
+model EmailToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   // store hashed token
+  type      String   // INVITE | VERIFY | RESET
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model EmailLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  toEmail   String
+  subject   String
+  template  String
+  status    String   // SENT | FAILED
+  error     String?
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  role      String?
+  action    String
+  details   String?
+  timestamp DateTime @default(now())
+}
