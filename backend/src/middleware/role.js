@@ -1,11 +1,14 @@
-const requireRole = (...allowedRoles) => {
+const requireRole = (allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
+    const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+  
+    
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions', userRole: req.user.role, allowedRoles: roles });
     }
 
     next();

@@ -7,14 +7,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Company {
+  id          Int      @id @default(autoincrement())
+  name        String
+  code        String   @unique // Auto-generated company code
+  email       String   @unique
+  phone       String?
+  logo        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  users       User[]
+}
+
 model User {
   id          Int       @id @default(autoincrement())
+  userId      String?   @unique // Auto-generated user ID
   name        String
   email       String    @unique
   password    String?   // null until user sets password (invited users)
   role        Role      @default(EMPLOYEE)
   isVerified  Boolean   @default(false)
+  companyId   Int?
   createdAt   DateTime  @default(now())
+  company     Company?  @relation(fields: [companyId], references: [id])
   employee    Employee?
   EmailTokens EmailToken[]
   EmailLogs   EmailLog[]
@@ -38,13 +53,82 @@ model Employee {
   pfApplicable              Boolean     @default(true)
   professionalTaxApplicable Boolean     @default(true)
   joinDate                  DateTime
-  bankAccountMasked         String?
+  managerId                 Int?
+  status                    String      @default("ACTIVE")
+  // Personal Info
+  dateOfBirth               DateTime?
+  address                   String?
+  gender                    String?
+  nationality               String?
+  maritalStatus             String?
+  phone                     String?
+  alternatePhone             String?
+  emergencyContactName      String?
+  emergencyContactPhone      String?
+  emergencyContactRelation   String?
+  aadharNumber              String?
+  panNumber                 String?
+  // Bank Details
+  bankAccountNumber         String?
+  bankName                  String?
+  ifscCode                  String?
+  accountHolderName         String?
+  accountType               String? // SAVINGS, CURRENT, etc.
+  // Files
+  resumePath                String?
+  // Relations
+  manager                   Employee?   @relation("EmployeeManager", fields: [managerId], references: [id])
+  subordinates              Employee[]  @relation("EmployeeManager")
   attendance                Attendance[]
   timeOff                   TimeOff[]
   payrunLines               PayrunLine[]
+  skills                    Skill[]
+  certifications            Certification[]
   user                      User        @relation(fields: [userId], references: [id])
   createdAt                 DateTime    @default(now())
   updatedAt                 DateTime    @updatedAt
+}
+
+model Skill {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int
+  name         String
+  proficiency  String   // Beginner, Intermediate, Advanced, Expert
+  employee     Employee @relation(fields: [employeeId], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+model Certification {
+  id           Int       @id @default(autoincrement())
+  employeeId   Int
+  name         String
+  issueDate    DateTime
+  validityDate DateTime?
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  createdAt    DateTime  @default(now())
+}
+
+model Department {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  message   String
+  type      String   // INFO, WARNING, SUCCESS, ERROR
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model ReportLog {
+  id          Int      @id @default(autoincrement())
+  generatedBy Int
+  type        String   // ATTENDANCE, PAYROLL, LEAVE
+  filePath    String?
+  createdAt   DateTime @default(now())
 }
 
 model Attendance {

@@ -5,6 +5,16 @@ const prisma = require('../config/prisma');
 const { createEmailToken, validateToken, markTokenUsed } = require('../services/token.service');
 const { sendVerificationEmail, sendInviteEmail, sendPasswordResetEmail } = require('../services/mailer.service');
 
+const generateUserId = async (firstName, lastName, companyId) => {
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  const companyCode = company ? company.code : 'OI';
+  const year = new Date().getFullYear();
+  const firstNameCode = firstName.substring(0, 2).toUpperCase();
+  const lastNameCode = lastName.substring(0, 2).toUpperCase();
+  const serialNumber = String(Date.now()).slice(-4);
+  return `${companyCode}${firstNameCode}${lastNameCode}${year}${serialNumber}`;
+};
+
 const generateJWT = (userId) => {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { 
     expiresIn: process.env.JWT_EXPIRES_IN || '1h' 
@@ -25,9 +35,19 @@ const register = async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
+    const nameParts = name.trim().split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts[nameParts.length - 1] || '';
+    
     const hashedPassword = await bcrypt.hash(password, 12);
+    
     const user = await prisma.user.create({
-      data: { name, email, password: hashedPassword }
+      data: { 
+        name, 
+        email, 
+        password: hashedPassword,
+        role: 'EMPLOYEE'
+      }
     });
 
     const token = await createEmailToken(prisma, user.id, 'VERIFY', 24);
@@ -38,12 +58,13 @@ const register = async (req, res) => {
         userId: user.id,
         role: user.role,
         action: 'USER_REGISTERED',
-        details: `User ${email} registered`
+        details: `User ${email} registered with ID: ${userId}`
       }
     });
 
     res.status(201).json({ 
-      message: 'User registered successfully. Please check your email for verification.' 
+      message: 'User registered successfully. Please check your email for verification.',
+      userId: userId
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -68,9 +89,10 @@ const login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    if (!user.isVerified) {
-      return res.status(401).json({ error: 'Please verify your email first' });
-    }
+    // Skip verification check for now - allow all users to login
+    // if (!user.isVerified && user.role === 'EMPLOYEE') {
+    //   return res.status(401).json({ error: 'Please verify your email first' });
+    // }
 
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
@@ -98,7 +120,6 @@ const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     
-    // Always return success to prevent email enumeration
     const user = await prisma.user.findUnique({ where: { email } });
     
     if (user) {
@@ -214,7 +235,6 @@ const setPassword = async (req, res) => {
   }
 };
 
-// Validation middleware
 const registerValidation = [
   body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
   body('email').isEmail().withMessage('Valid email required'),

@@ -8,6 +8,7 @@ const server = app.listen(PORT, () => {
   console.log(`🚀 WorkZen HRMS Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
+
   
   if (process.env.NODE_ENV === 'development') {
     console.log(`📧 SMTP Host: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}`);

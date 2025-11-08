@@ -2,7 +2,7 @@ const nodemailer = require('nodemailer');
 const prisma = require('../config/prisma');
 
 const createTransporter = () => {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT),
     secure: process.env.SMTP_SECURE === 'true',

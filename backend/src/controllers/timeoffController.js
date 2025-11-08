@@ -92,6 +92,9 @@ const getTimeOffRequests = async (req, res) => {
 
     // Role-based filtering
     if (role === 'EMPLOYEE') {
+      if (!userEmployeeId) {
+        return res.status(400).json({ error: 'Employee record not found. Please complete your profile first.' });
+      }
       whereClause.employeeId = userEmployeeId;
     } else if (employeeId) {
       whereClause.employeeId = parseInt(employeeId);

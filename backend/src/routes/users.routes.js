@@ -1,18 +1,40 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const { requireRole } = require('../middleware/role');
+const { authenticateToken } = require("../middleware/auth");
+const { requireRole } = require("../middleware/auth");
 const {
-  inviteUser,
+  createEmployee,
+  inviteEmployee,
   getUsers,
   getUser,
   updateUser,
-  inviteValidation
-} = require('../controllers/userController');
+  verifyEmployee,
+  createEmployeeValidation,
+  inviteEmployeeValidation,
+} = require("../controllers/userController");
 
-router.post('/invite', authenticateToken, requireRole('ADMIN'), inviteValidation, inviteUser);
-router.get('/', authenticateToken, requireRole('ADMIN', 'HR'), getUsers);
-router.get('/:id', authenticateToken, requireRole('ADMIN', 'HR'), getUser);
-router.put('/:id', authenticateToken, requireRole('ADMIN'), updateUser);
+router.post(
+  "/create",
+  authenticateToken,
+  requireRole(["ADMIN"]),
+  createEmployeeValidation,
+  createEmployee
+);
+router.post(
+  "/invite",
+  authenticateToken,
+  requireRole(["ADMIN"]),
+  inviteEmployeeValidation,
+  inviteEmployee
+);
+router.get("/", authenticateToken, requireRole(["ADMIN", "HR"]), getUsers);
+router.get("/:id", authenticateToken, requireRole(["ADMIN", "HR"]), getUser);
+router.put("/:id", authenticateToken, requireRole(["ADMIN"]), updateUser);
+router.post(
+  "/:id/verify",
+  authenticateToken,
+  requireRole(["ADMIN"]),
+  verifyEmployee
+);
 
 module.exports = router;
