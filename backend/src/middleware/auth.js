@@ -22,7 +22,8 @@ const authenticateToken = async (req, res, next) => {
 
     req.user = {
       ...user,
-      employeeId: user.employee?.id
+      employeeId: user.employee?.id,
+      companyId: user.companyId
     };
     next();
   } catch (error) {

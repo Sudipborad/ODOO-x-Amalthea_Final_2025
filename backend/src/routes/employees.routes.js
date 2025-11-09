@@ -7,8 +7,11 @@ const {
   getEmployee,
   createEmployee,
   updateEmployee,
+  updateEmployeeProfile,
+  getEmployeeAuditLogs,
   createEmployeeValidation,
   updateEmployeeValidation,
+  updateEmployeeProfileValidation,
 } = require("../controllers/employeeController");
 
 router.get("/", authenticateToken, getEmployees);
@@ -31,6 +34,22 @@ router.put(
   requireRole(["ADMIN", "HR"]),
   updateEmployeeValidation,
   updateEmployee
+);
+
+// Enhanced profile update endpoint with comprehensive employee details
+router.put(
+  "/:id/profile",
+  authenticateToken,
+  updateEmployeeProfileValidation,
+  updateEmployeeProfile
+);
+
+// Get audit logs for a specific employee (Admin/HR only)
+router.get(
+  "/:id/audit-logs",
+  authenticateToken,
+  requireRole(["ADMIN", "HR"]),
+  getEmployeeAuditLogs
 );
 
 module.exports = router;

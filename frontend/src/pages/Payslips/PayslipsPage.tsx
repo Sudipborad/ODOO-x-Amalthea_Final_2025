@@ -1,13 +1,31 @@
-import React from "react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Table } from "../../components/ui/Table";
 import { useFetch } from "../../hooks/useFetch";
-import { getPayslips } from "../../api/apiAdapter";
+import { getPayslips, downloadPayslip } from "../../api/apiAdapter";
 import { useAuth } from "../../context/AuthContext";
 import { formatDate, formatCurrency } from "../../utils/format";
 import { canAccessPayroll } from "../../utils/roleUtils";
 
 export const PayslipsPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleDownload = async (payslipId: number) => {
+    try {
+      const blob = await downloadPayslip(payslipId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `payslip_${payslipId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Download failed:", error);
+    }
+  };
 
   // Only fetch payslips for the current user if they're an employee
   const employeeId = canAccessPayroll(user?.role || "EMPLOYEE")
@@ -19,30 +37,29 @@ export const PayslipsPage: React.FC = () => {
     error,
   } = useFetch(() => getPayslips(employeeId), [employeeId]);
 
-  const payslips =
-    (payslipsData as any)?.payslips && (payslipsData as any).payslips.length > 0
-      ? (payslipsData as any).payslips.map((p: any) => ({
-          id: p.id,
-          employeeName: p.payrunLine?.employee?.user?.name || "Unknown",
-          payPeriod: p.payrunLine?.payrun
-            ? `${new Date(p.payrunLine.payrun.periodStart).toLocaleDateString(
-                "en-US",
-                { month: "short", year: "numeric" }
-              )}`
-            : "-",
-          payDate:
-            p.generatedAt ||
-            p.payrunLine?.payrun?.periodEnd ||
-            new Date().toISOString().split("T")[0],
-          grossPay: p.payrunLine?.gross || 0,
-          deductions: {
-            tax: p.payrunLine?.professionalTax || 0,
-            insurance: 0,
-            retirement: p.payrunLine?.pfEmployee || 0,
-          },
-          netPay: p.payrunLine?.net || 0,
-        }))
-      : [];
+  const payslips = Array.isArray(payslipsData)
+    ? payslipsData.map((p: any) => ({
+        id: p.id,
+        employeeName: p.payrunLine?.employee?.user?.name || "Unknown",
+        payPeriod: p.payrunLine?.payrun
+          ? `${new Date(p.payrunLine.payrun.periodStart).toLocaleDateString(
+              "en-US",
+              { month: "short", year: "numeric" }
+            )}`
+          : "-",
+        payDate:
+          p.generatedAt ||
+          p.payrunLine?.payrun?.periodEnd ||
+          new Date().toISOString().split("T")[0],
+        grossPay: p.payrunLine?.gross || 0,
+        deductions: {
+          tax: p.payrunLine?.professionalTax || 0,
+          insurance: 0,
+          retirement: p.payrunLine?.pfEmployee || 0,
+        },
+        netPay: p.payrunLine?.net || 0,
+      }))
+    : [];
 
   const columns = [
     { key: "employeeName", header: "Employee" },
@@ -77,10 +94,16 @@ export const PayslipsPage: React.FC = () => {
       header: "Actions",
       render: (value: any, row: any) => (
         <div className="flex space-x-2">
-          <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+          <button
+            onClick={() => navigate(`/payslips/${row.id}`)}
+            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+          >
             View
           </button>
-          <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+          <button
+            onClick={() => handleDownload(row.id)}
+            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+          >
             Download
           </button>
         </div>
@@ -122,13 +145,15 @@ export const PayslipsPage: React.FC = () => {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Payslips</h1>
-        <p className="text-gray-600">
-          {canAccessPayroll(user?.role || "EMPLOYEE")
-            ? "View and manage employee payslips"
-            : "View your payslip history"}
-        </p>
+      <div className="mb-6 flex justify-between items-start">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Payslips</h1>
+          <p className="text-gray-600">
+            {canAccessPayroll(user?.role || "EMPLOYEE")
+              ? "View and manage employee payslips"
+              : "View your payslip history"}
+          </p>
+        </div>
       </div>
 
       {/* Summary Cards - Only for employees viewing their own payslips */}

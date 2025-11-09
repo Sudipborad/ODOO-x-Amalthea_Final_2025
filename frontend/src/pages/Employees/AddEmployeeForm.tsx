@@ -53,10 +53,6 @@ export const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({
         temporaryPassword: '',
         role: 'EMPLOYEE',
       });
-      
-      setTimeout(() => {
-        onClose();
-      }, 2000);
     } catch (error) {
       console.error('Error creating employee:', error);
       showNotification(`Failed to create employee: ${error.message || 'Please try again'}`, 'error');

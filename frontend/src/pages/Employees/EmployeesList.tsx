@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useFetch } from "../../hooks/useFetch";
 import {
   getEmployees,
@@ -23,9 +23,11 @@ const getUsers = async () => {
 import { AddEmployeeForm } from "./AddEmployeeForm";
 import { useAuth } from "../../context/AuthContext";
 import { canAccessEmployees } from "../../utils/roleUtils";
+import { cacheManager } from "../../utils/cacheManager";
 
 export const EmployeesList: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const {
     data: employees,
     loading,
@@ -216,7 +218,8 @@ export const EmployeesList: React.FC = () => {
           return (
             <div
               key={employee.id}
-              className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
+              className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 cursor-pointer"
+              onClick={() => navigate(`/employees/${employee.id}`)}
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
@@ -271,19 +274,14 @@ export const EmployeesList: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex justify-between items-center">
-                <Link
-                  to={`/employees/${employee.id}`}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
-                  View Details
-                </Link>
-                {user?.role === "ADMIN" && !employee.isVerified && (
+              {user?.role === "ADMIN" && !employee.isVerified && (
+                <div className="flex justify-end">
                   <button
-                    onClick={async () => {
+                    onClick={async (e) => {
+                      e.stopPropagation(); // Prevent card click navigation
                       try {
                         await verifyEmployee(employee.id);
-                        refetch();
+                        cacheManager.invalidateAll();
                       } catch (error) {
                         console.error("Failed to verify employee:", error);
                       }
@@ -292,8 +290,8 @@ export const EmployeesList: React.FC = () => {
                   >
                     Verify
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -313,7 +311,7 @@ export const EmployeesList: React.FC = () => {
             console.log("Creating employee with data:", employeeData);
             const result = await createEmployee(employeeData);
             console.log("Employee created successfully:", result);
-            await refetch();
+            setShowAddForm(false);
           } catch (error) {
             console.error("Failed to create employee:", error);
             throw error;

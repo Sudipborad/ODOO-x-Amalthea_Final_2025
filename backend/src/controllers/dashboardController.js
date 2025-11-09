@@ -2,13 +2,12 @@ const prisma = require('../config/prisma');
 
 const getDashboardSummary = async (req, res) => {
   try {
-    const { companyId } = req.user;
-
-    // Total Employees
+    // Total Employees (excluding admin users)
     const totalEmployees = await prisma.employee.count({
       where: {
-        user: { companyId },
-        status: 'ACTIVE'
+        user: {
+          role: { in: ['EMPLOYEE', 'HR', 'PAYROLL'] }
+        }
       }
     });
 
@@ -17,75 +16,64 @@ const getDashboardSummary = async (req, res) => {
     const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
     const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
     
-    const totalWorkingDays = endOfMonth.getDate();
-    const totalAttendanceRecords = await prisma.attendance.count({
-      where: {
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth
-        },
-        employee: {
-          user: { companyId }
-        }
+    // Get working days (excluding weekends)
+    const workingDays = [];
+    for (let d = new Date(startOfMonth); d <= endOfMonth; d.setDate(d.getDate() + 1)) {
+      const dayOfWeek = d.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday (0) or Saturday (6)
+        workingDays.push(new Date(d));
       }
-    });
+    }
     
+    const totalExpectedAttendance = totalEmployees * workingDays.length;
     const presentRecords = await prisma.attendance.count({
       where: {
         date: {
           gte: startOfMonth,
           lte: endOfMonth
         },
-        status: 'PRESENT',
-        employee: {
-          user: { companyId }
-        }
+        status: { in: ['PRESENT', 'LATE', 'COMPLETED'] }
       }
     });
 
-    const attendancePercentage = totalAttendanceRecords > 0 
-      ? Math.round((presentRecords / totalAttendanceRecords) * 100) 
+    const attendancePercentage = totalExpectedAttendance > 0 
+      ? Math.round((presentRecords / totalExpectedAttendance) * 100) 
       : 0;
 
-    // Active Leaves (Pending + Approved for current period)
+    // Active Leaves (Approved leaves that are currently active)
+    const today = new Date();
     const activeLeaves = await prisma.timeOff.count({
       where: {
-        status: { in: ['PENDING', 'APPROVED'] },
-        fromDate: { lte: new Date() },
-        toDate: { gte: new Date() },
-        employee: {
-          user: { companyId }
-        }
+        status: 'APPROVED',
+        fromDate: { lte: today },
+        toDate: { gte: today }
       }
     });
 
-    // Payroll Summary for current month
-    const payrollSummary = await prisma.payrunLine.aggregate({
-      where: {
-        payrun: {
-          periodStart: { gte: startOfMonth },
-          periodEnd: { lte: endOfMonth }
-        },
-        employee: {
-          user: { companyId }
-        }
-      },
-      _sum: {
-        gross: true,
-        net: true
-      },
-      _count: {
-        id: true
+    // Payroll Summary for latest payrun
+    const latestPayrun = await prisma.payrun.findFirst({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        payrunLines: true
       }
     });
+    
+    const payrollSummary = latestPayrun ? {
+      _sum: {
+        gross: latestPayrun.totalGross,
+        net: latestPayrun.totalNet
+      },
+      _count: {
+        id: latestPayrun.payrunLines.length
+      }
+    } : {
+      _sum: { gross: 0, net: 0 },
+      _count: { id: 0 }
+    };
 
     // Department-wise employee count
     const departmentStats = await prisma.employee.groupBy({
       by: ['department'],
-      where: {
-        user: { companyId },
-        status: 'ACTIVE'
-      },
       _count: {
         id: true
       }
@@ -95,19 +83,16 @@ const getDashboardSummary = async (req, res) => {
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-    const monthlySalaryExpense = await prisma.payrunLine.groupBy({
-      by: ['payrunId'],
+    const monthlySalaryExpense = await prisma.payrun.findMany({
       where: {
-        payrun: {
-          periodStart: { gte: sixMonthsAgo }
-        },
-        employee: {
-          user: { companyId }
-        }
+        periodStart: { gte: sixMonthsAgo },
+        status: 'FINALIZED'
       },
-      _sum: {
-        net: true
-      }
+      select: {
+        totalNet: true,
+        periodStart: true
+      },
+      orderBy: { periodStart: 'desc' }
     });
 
     res.json({
@@ -123,7 +108,10 @@ const getDashboardSummary = async (req, res) => {
         department: dept.department,
         count: dept._count.id
       })),
-      monthlySalaryExpense
+      monthlySalaryExpense: monthlySalaryExpense.map(payrun => ({
+        _sum: { net: payrun.totalNet },
+        month: payrun.periodStart
+      }))
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -132,25 +120,23 @@ const getDashboardSummary = async (req, res) => {
 
 const getDashboardAlerts = async (req, res) => {
   try {
-    const { companyId } = req.user;
-
-    // Pending leave requests
+    // Pending leave requests (only from actual employees, not admins)
     const pendingLeaves = await prisma.timeOff.count({
       where: {
         status: 'PENDING',
         employee: {
-          user: { companyId }
+          user: {
+            role: { in: ['EMPLOYEE', 'HR', 'PAYROLL'] }
+          }
         }
       }
     });
 
     // Employees with incomplete profiles
-    const incompleteProfiles = await prisma.employee.count({
+    const incompleteProfiles = await prisma.user.count({
       where: {
-        user: { 
-          companyId,
-          isVerified: false 
-        }
+        isVerified: false,
+        role: { not: 'ADMIN' }
       }
     });
 

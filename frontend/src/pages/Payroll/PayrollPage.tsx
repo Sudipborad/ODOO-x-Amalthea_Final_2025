@@ -3,7 +3,11 @@ import { Table } from "../../components/ui/Table";
 import { FormField } from "../../components/ui/FormField";
 import { Notification } from "../../components/ui/Notification";
 import { useFetch } from "../../hooks/useFetch";
-import { getPayruns, computePayrollDraft } from "../../api/apiAdapter";
+import {
+  getPayruns,
+  computePayrollDraft,
+  finalizePayroll,
+} from "../../api/apiAdapter";
 import { formatCurrency } from "../../utils/format";
 
 export const PayrollPage: React.FC = () => {
@@ -15,6 +19,7 @@ export const PayrollPage: React.FC = () => {
     )}`;
   });
   const [isComputing, setIsComputing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [payrollData, setPayrollData] = useState<any[]>([]);
   const [hasComputed, setHasComputed] = useState(true);
 
@@ -56,7 +61,22 @@ export const PayrollPage: React.FC = () => {
           response.payrollData &&
           response.payrollData.length > 0
         ) {
-          setPayrollData(response.payrollData);
+          // Ensure each payroll item has the expected structure
+          const normalizedData = response.payrollData.map((item: any) => ({
+            employeeName: item.employeeName || "Unknown Employee",
+            baseSalary: item.baseSalary || 0,
+            hoursWorked: item.hoursWorked || 0,
+            overtimeHours: item.overtimeHours || 0,
+            grossPay: item.grossPay || 0,
+            deductions: item.deductions || {
+              tax: 0,
+              insurance: 0,
+              retirement: 0,
+            },
+            netPay: item.netPay || 0,
+            ...item, // Keep other properties
+          }));
+          setPayrollData(normalizedData);
         } else {
           setPayrollData([]);
         }
@@ -74,32 +94,166 @@ export const PayrollPage: React.FC = () => {
     }
   };
 
+  const handleExportCSV = () => {
+    try {
+      if (!payrollData || payrollData.length === 0) {
+        showNotification("No payroll data to export", "error");
+        return;
+      }
+
+      // Create CSV content
+      const headers = [
+        "Employee Name",
+        "Department",
+        "Designation",
+        "Base Salary",
+        "Hours Worked",
+        "Overtime Hours",
+        "Gross Pay",
+        "Tax",
+        "Insurance",
+        "Retirement",
+        "Total Deductions",
+        "Net Pay",
+      ];
+
+      const csvContent = [
+        headers.join(","),
+        ...payrollData.map((row) =>
+          [
+            `"${row.employeeName || row.name || "Unknown"}"`,
+            `"${row.department || ""}"`,
+            `"${row.designation || ""}"`,
+            row.baseSalary || 0,
+            row.hoursWorked || 0,
+            row.overtimeHours || 0,
+            row.grossPay || 0,
+            row.deductions?.tax || 0,
+            row.deductions?.insurance || 0,
+            row.deductions?.retirement || 0,
+            (row.deductions?.tax || 0) +
+              (row.deductions?.insurance || 0) +
+              (row.deductions?.retirement || 0),
+            row.netPay || 0,
+          ].join(",")
+        ),
+      ].join("\n");
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `payroll_draft_${selectedPeriod}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showNotification("Payroll data exported successfully!", "success");
+    } catch (error) {
+      console.error("Export error:", error);
+      showNotification("Failed to export payroll data", "error");
+    }
+  };
+
+  const handleProcessPayroll = async () => {
+    if (!payrollData || payrollData.length === 0) {
+      showNotification("No payroll data to process", "error");
+      return;
+    }
+
+    if (!selectedPeriod) {
+      showNotification("Please select a pay period", "error");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to process payroll for ${selectedPeriod}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsProcessing(true);
+    try {
+      const [year, month] = selectedPeriod.split("-");
+      const periodStart = `${year}-${month}-01`;
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      const periodEnd = `${year}-${month}-${lastDay}`;
+
+      await finalizePayroll(periodStart, periodEnd, payrollData);
+
+      showNotification(
+        "Payroll processed successfully! Payslips have been generated.",
+        "success"
+      );
+
+      // Clear the draft data and reload payroll history
+      setPayrollData([]);
+      setHasComputed(false);
+
+      // Refresh the page to show updated payroll runs
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (error) {
+      console.error("Process payroll error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Please try again.";
+      showNotification(`Failed to process payroll: ${errorMessage}`, "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const columns = [
-    { key: "employeeName", header: "Employee" },
+    {
+      key: "employeeName",
+      header: "Employee",
+      render: (value: string, row: any) =>
+        value || row.name || "Unknown Employee",
+    },
     {
       key: "baseSalary",
       header: "Base Salary",
-      render: (value: number) => formatCurrency(value),
+      render: (value: number, row: any) =>
+        formatCurrency(value || row.gross || 0),
     },
-    { key: "hoursWorked", header: "Hours Worked" },
-    { key: "overtimeHours", header: "Overtime Hours" },
+    {
+      key: "hoursWorked",
+      header: "Hours Worked",
+      render: (value: number) => value || 0,
+    },
+    {
+      key: "overtimeHours",
+      header: "Overtime Hours",
+      render: (value: number) => value || 0,
+    },
     {
       key: "grossPay",
       header: "Gross Pay",
-      render: (value: number) => formatCurrency(value),
+      render: (value: number, row: any) =>
+        formatCurrency(value || row.gross || 0),
     },
     {
       key: "deductions",
       header: "Total Deductions",
-      render: (value: any) =>
-        formatCurrency(value.tax + value.insurance + value.retirement),
+      render: (value: any) => {
+        if (!value || typeof value !== "object") {
+          return formatCurrency(0);
+        }
+        const tax = value.tax || 0;
+        const insurance = value.insurance || 0;
+        const retirement = value.retirement || 0;
+        return formatCurrency(tax + insurance + retirement);
+      },
     },
     {
       key: "netPay",
       header: "Net Pay",
-      render: (value: number) => (
+      render: (value: number, row: any) => (
         <span className="font-semibold text-green-600">
-          {formatCurrency(value)}
+          {formatCurrency(value || row.net || 0)}
         </span>
       ),
     },
@@ -130,10 +284,13 @@ export const PayrollPage: React.FC = () => {
   };
 
   const totalGrossPay = payrollData.reduce(
-    (sum, item) => sum + item.grossPay,
+    (sum, item) => sum + (item.grossPay || item.gross || 0),
     0
   );
-  const totalNetPay = payrollData.reduce((sum, item) => sum + item.netPay, 0);
+  const totalNetPay = payrollData.reduce(
+    (sum, item) => sum + (item.netPay || item.net || 0),
+    0
+  );
   const totalDeductions = totalGrossPay - totalNetPay;
 
   return (
@@ -189,7 +346,10 @@ export const PayrollPage: React.FC = () => {
                           <div className="text-sm font-medium text-gray-900">
                             {new Date(payrun.periodStart).toLocaleDateString(
                               "en-US",
-                              { month: "short", year: "numeric" }
+                              {
+                                month: "short",
+                                year: "numeric",
+                              }
                             )}
                           </div>
                           <div className="text-sm text-gray-500">
@@ -237,7 +397,7 @@ export const PayrollPage: React.FC = () => {
             <h2 className="text-lg font-medium text-gray-900 mb-4">
               Payroll Computation
             </h2>
-            <div className="flex items-end space-x-4">
+            <div className="flex items-end space-x-4 mb-6">
               <div className="flex-1 max-w-xs">
                 <FormField
                   label="Pay Period"
@@ -248,13 +408,56 @@ export const PayrollPage: React.FC = () => {
                   placeholder="Select pay period"
                 />
               </div>
-              <button
-                onClick={handleComputeDraft}
-                disabled={isComputing}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded disabled:opacity-50"
-              >
-                {isComputing ? "Computing..." : "Compute Draft"}
-              </button>
+              <div className="flex items-end">
+                <button
+                  onClick={handleComputeDraft}
+                  disabled={isComputing}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {isComputing ? (
+                    <>
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      <span>Computing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                        />
+                      </svg>
+                      <span>Compute Draft</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -357,11 +560,72 @@ export const PayrollPage: React.FC = () => {
               </h2>
               {hasComputed && payrollData.length > 0 && (
                 <div className="flex space-x-3">
-                  <button className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
-                    Export CSV
+                  <button
+                    onClick={handleExportCSV}
+                    className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                    <span>Export CSV</span>
                   </button>
-                  <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
-                    Process Payroll
+                  <button
+                    onClick={handleProcessPayroll}
+                    disabled={isProcessing || isComputing}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <svg
+                          className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        <span>Processing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                        <span>Process Payroll</span>
+                      </>
+                    )}
                   </button>
                 </div>
               )}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { DollarSign, Plus, Trash2, User, Building, Briefcase, Calculator, Save, Search } from "lucide-react";
 import { FormField } from "../../components/ui/FormField";
 import { useFetch } from "../../hooks/useFetch";
-import { getAllEmployees } from "../../api/apiAdapter";
+import { getAllEmployees, updateEmployeeProfile } from "../../api/apiAdapter";
 
 interface SalaryComponent {
   id: string;
@@ -30,12 +31,23 @@ export const SalaryManagementPage: React.FC = () => {
   const [salaryComponents, setSalaryComponents] = useState<SalaryComponent[]>(
     []
   );
+  const [searchTerm, setSearchTerm] = useState("");
+  const [deductions, setDeductions] = useState<
+    {
+      name: string;
+      rate: number;
+      baseComponent: string;
+      amount: number;
+    }[]
+  >([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Fetch employees from API
   const { data: employeesData, loading: employeesLoading } =
     useFetch(getAllEmployees);
 
-  const employees: Employee[] = employeesData
+  const allEmployees: Employee[] = employeesData
     ? employeesData.map((emp: any) => ({
         id: emp.id.toString(),
         name: emp.user?.name || "Unknown",
@@ -47,14 +59,12 @@ export const SalaryManagementPage: React.FC = () => {
       }))
     : [];
 
-  const [deductions, setDeductions] = useState<
-    {
-      name: string;
-      rate: number;
-      baseComponent: string;
-      amount: number;
-    }[]
-  >([]);
+  const employees = allEmployees.filter(emp => 
+    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    emp.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    emp.position.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const totalEarnings = salaryComponents.reduce(
     (sum, comp) => sum + comp.amount,
@@ -101,6 +111,9 @@ export const SalaryManagementPage: React.FC = () => {
         amount: calculateComponentAmount(comp, monthlyWage, prev),
       }))
     );
+    
+    // Also recalculate deductions
+    setDeductions(getDefaultDeductions(monthlyWage));
   };
 
   const updateComponent = (
@@ -123,36 +136,156 @@ export const SalaryManagementPage: React.FC = () => {
     setSalaryComponents((prev) => prev.filter((comp) => comp.id !== id));
   };
 
+  const handleSaveConfiguration = async () => {
+    if (!selectedEmployee) return;
+    
+    setIsSaving(true);
+    setSaveMessage(null);
+    
+    try {
+      await updateEmployeeProfile(parseInt(selectedEmployee.id), {
+        baseSalary: editableWage.monthly,
+        allowances: totalEarnings - editableWage.monthly
+      });
+      
+      setSaveMessage({ type: 'success', text: 'Salary configuration saved successfully!' });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error: any) {
+      setSaveMessage({ type: 'error', text: error.message || 'Failed to save configuration' });
+      setTimeout(() => setSaveMessage(null), 5000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    if (selectedEmployee) {
+      const monthlyWage = selectedEmployee.monthlyWage;
+      setEditableWage({ monthly: monthlyWage, yearly: monthlyWage * 12 });
+      setSalaryComponents(getDefaultSalaryComponents(monthlyWage));
+      setDeductions(getDefaultDeductions(monthlyWage));
+      setSaveMessage(null);
+    }
+  };
+
+  const getDefaultSalaryComponents = (monthlyWage: number): SalaryComponent[] => {
+    return [
+      {
+        id: 'basic',
+        name: 'Basic Salary',
+        type: 'percentage',
+        value: 50,
+        amount: (monthlyWage * 50) / 100
+      },
+      {
+        id: 'hra',
+        name: 'House Rent Allowance',
+        type: 'percentage',
+        value: 40,
+        baseComponent: 'Basic Salary',
+        amount: ((monthlyWage * 50) / 100 * 40) / 100
+      },
+      {
+        id: 'transport',
+        name: 'Transport Allowance',
+        type: 'fixed',
+        value: 2000,
+        amount: 2000
+      },
+      {
+        id: 'medical',
+        name: 'Medical Allowance',
+        type: 'fixed',
+        value: 1500,
+        amount: 1500
+      },
+      {
+        id: 'special',
+        name: 'Special Allowance',
+        type: 'percentage',
+        value: 10,
+        amount: (monthlyWage * 10) / 100
+      }
+    ];
+  };
+
+  const getDefaultDeductions = (monthlyWage: number) => {
+    const basicSalary = (monthlyWage * 50) / 100;
+    return [
+      {
+        name: 'Provident Fund (Employee)',
+        rate: 12,
+        baseComponent: 'Basic Salary',
+        amount: (basicSalary * 12) / 100
+      },
+      {
+        name: 'Professional Tax',
+        rate: 0,
+        baseComponent: 'Gross Salary',
+        amount: 200
+      },
+      {
+        name: 'Income Tax (TDS)',
+        rate: 10,
+        baseComponent: 'Gross Salary',
+        amount: (monthlyWage * 10) / 100
+      }
+    ];
+  };
+
   useEffect(() => {
     if (selectedEmployee) {
+      const monthlyWage = selectedEmployee.monthlyWage;
       setEditableWage({
-        monthly: selectedEmployee.monthlyWage,
-        yearly: selectedEmployee.yearlyWage,
+        monthly: monthlyWage,
+        yearly: monthlyWage * 12,
       });
 
-      // Clear components and deductions when selecting a new employee
-      setSalaryComponents([]);
-      setDeductions([]);
+      // Auto-populate standard salary components
+      setSalaryComponents(getDefaultSalaryComponents(monthlyWage));
+      setDeductions(getDefaultDeductions(monthlyWage));
     }
   }, [selectedEmployee]);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Salary Management
-          </h1>
-          <p className="text-gray-600">
-            Configure salary components and wage structures
+        <div className="mb-8">
+          <div className="flex items-center space-x-3 mb-2">
+            <div className="p-2 bg-blue-600 rounded-lg">
+              <DollarSign className="w-6 h-6 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Salary Management
+            </h1>
+          </div>
+          <p className="text-gray-600 text-lg">
+            Configure salary components and wage structures for your employees
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Employee Selection */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-semibold mb-4">Select Employee</h2>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <User className="w-5 h-5 text-blue-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Select Employee</h2>
+              </div>
+              
+              {/* Search Bar */}
+              <div className="relative mb-4">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search employees..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+              </div>
               <div className="space-y-2">
                 {employeesLoading ? (
                   <div className="text-center py-4">
@@ -162,25 +295,45 @@ export const SalaryManagementPage: React.FC = () => {
                     </p>
                   </div>
                 ) : employees.length > 0 ? (
-                  employees.map((employee) => (
+                  <>
+                    {searchTerm && (
+                      <div className="text-sm text-gray-600 mb-2">
+                        Found {employees.length} employee{employees.length !== 1 ? 's' : ''}
+                      </div>
+                    )}
+                    {employees.map((employee) => (
                     <button
                       key={employee.id}
                       onClick={() => setSelectedEmployee(employee)}
-                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      className={`w-full text-left p-4 rounded-lg border-2 transition-all duration-200 ${
                         selectedEmployee?.id === employee.id
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200 hover:border-gray-300"
+                          ? "border-blue-500 bg-blue-50 shadow-md transform scale-[1.02]"
+                          : "border-gray-200 hover:border-blue-300 hover:shadow-sm"
                       }`}
                     >
-                      <div className="font-medium">{employee.name}</div>
-                      <div className="text-sm text-gray-600">
-                        {employee.employeeId}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {employee.position}
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                          {employee.name.charAt(0)}
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-semibold text-gray-900">{employee.name}</div>
+                          <div className="text-sm text-gray-600 flex items-center space-x-2">
+                            <span>{employee.employeeId}</span>
+                            <span>•</span>
+                            <span>{employee.position}</span>
+                          </div>
+                          <div className="text-sm text-green-600 font-medium">
+                            ₹{employee.monthlyWage.toLocaleString()}/month
+                          </div>
+                        </div>
                       </div>
                     </button>
-                  ))
+                    ))}
+                  </>
+                ) : searchTerm ? (
+                  <div className="text-center py-4 text-gray-500">
+                    <p>No employees found matching "{searchTerm}".</p>
+                  </div>
                 ) : (
                   <div className="text-center py-4 text-gray-500">
                     <p>No employees found.</p>
@@ -195,30 +348,30 @@ export const SalaryManagementPage: React.FC = () => {
             {selectedEmployee ? (
               <div className="space-y-6">
                 {/* Employee Info */}
-                <div className="bg-white rounded-lg shadow p-6">
-                  <h2 className="text-lg font-semibold mb-4">
-                    Employee Information
-                  </h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-600">Name</p>
-                      <p className="font-medium">{selectedEmployee.name}</p>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+                  <div className="flex items-center space-x-4 mb-6">
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
+                      {selectedEmployee.name.charAt(0)}
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Employee ID</p>
-                      <p className="font-medium">
-                        {selectedEmployee.employeeId}
-                      </p>
+                      <h2 className="text-xl font-bold text-gray-900">{selectedEmployee.name}</h2>
+                      <p className="text-gray-600">{selectedEmployee.employeeId}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Department</p>
-                      <p className="font-medium">
-                        {selectedEmployee.department}
-                      </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="flex items-center space-x-3">
+                      <Building className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <p className="text-sm text-gray-600">Department</p>
+                        <p className="font-semibold text-gray-900">{selectedEmployee.department}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Position</p>
-                      <p className="font-medium">{selectedEmployee.position}</p>
+                    <div className="flex items-center space-x-3">
+                      <Briefcase className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <p className="text-sm text-gray-600">Position</p>
+                        <p className="font-semibold text-gray-900">{selectedEmployee.position}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -254,14 +407,18 @@ export const SalaryManagementPage: React.FC = () => {
                 </div>
 
                 {/* Salary Components */}
-                <div className="bg-white rounded-lg shadow p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold">Salary Components</h2>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="flex items-center space-x-2">
+                      <Calculator className="w-5 h-5 text-blue-600" />
+                      <h2 className="text-lg font-semibold text-gray-900">Salary Components</h2>
+                    </div>
                     <button
                       onClick={addComponent}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                      className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg"
                     >
-                      Add Component
+                      <Plus className="w-4 h-4" />
+                      <span>Add Component</span>
                     </button>
                   </div>
 
@@ -318,19 +475,20 @@ export const SalaryManagementPage: React.FC = () => {
                           </div>
                           <button
                             onClick={() => removeComponent(component.id)}
-                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                            className="flex items-center justify-center w-10 h-10 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remove component"
                           >
-                            Remove
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
                     <div className="flex justify-between items-center">
-                      <span className="font-medium">Total Earnings:</span>
-                      <span className="font-bold text-green-600">
+                      <span className="font-semibold text-gray-700">Total Earnings:</span>
+                      <span className="font-bold text-2xl text-green-600">
                         ₹{totalEarnings.toLocaleString()}
                       </span>
                     </div>
@@ -338,32 +496,37 @@ export const SalaryManagementPage: React.FC = () => {
                 </div>
 
                 {/* Deductions */}
-                <div className="bg-white rounded-lg shadow p-6">
-                  <h2 className="text-lg font-semibold mb-4">Deductions</h2>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <div className="w-5 h-5 bg-red-100 rounded flex items-center justify-center">
+                      <span className="text-red-600 text-xs font-bold">-</span>
+                    </div>
+                    <h2 className="text-lg font-semibold text-gray-900">Deductions</h2>
+                  </div>
                   <div className="space-y-3">
                     {deductions.map((deduction, index) => (
                       <div
                         key={index}
-                        className="flex justify-between items-center py-2 border-b border-gray-100"
+                        className="flex justify-between items-center py-3 px-4 bg-red-50 rounded-lg border border-red-100"
                       >
                         <div>
-                          <span className="font-medium">{deduction.name}</span>
+                          <span className="font-semibold text-gray-900">{deduction.name}</span>
                           {deduction.rate > 0 && (
                             <span className="text-sm text-gray-600 ml-2">
                               ({deduction.rate}% of {deduction.baseComponent})
                             </span>
                           )}
                         </div>
-                        <span className="font-medium text-red-600">
+                        <span className="font-bold text-red-600 text-lg">
                           -₹{deduction.amount.toLocaleString()}
                         </span>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-4 p-4 bg-red-50 rounded-lg">
+                  <div className="mt-6 p-4 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border border-red-200">
                     <div className="flex justify-between items-center">
-                      <span className="font-medium">Total Deductions:</span>
-                      <span className="font-bold text-red-600">
+                      <span className="font-semibold text-gray-700">Total Deductions:</span>
+                      <span className="font-bold text-2xl text-red-600">
                         -₹{totalDeductions.toLocaleString()}
                       </span>
                     </div>
@@ -371,25 +534,52 @@ export const SalaryManagementPage: React.FC = () => {
                 </div>
 
                 {/* Net Salary */}
-                <div className="bg-white rounded-lg shadow p-6">
+                <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl shadow-xl p-8 text-white">
                   <div className="text-center">
-                    <h2 className="text-lg font-semibold mb-2">Net Salary</h2>
-                    <div className="text-3xl font-bold text-blue-600">
+                    <div className="flex items-center justify-center space-x-2 mb-4">
+                      <DollarSign className="w-8 h-8" />
+                      <h2 className="text-2xl font-bold">Net Salary</h2>
+                    </div>
+                    <div className="text-5xl font-bold mb-2">
                       ₹{netSalary.toLocaleString()}
                     </div>
-                    <p className="text-gray-600 mt-2">
+                    <p className="text-blue-100 text-lg">
                       Monthly take-home salary after all deductions
                     </p>
                   </div>
                 </div>
 
+                {/* Save Message */}
+                {saveMessage && (
+                  <div className={`p-4 rounded-lg border ${
+                    saveMessage.type === 'success' 
+                      ? 'bg-green-50 border-green-200 text-green-800'
+                      : 'bg-red-50 border-red-200 text-red-800'
+                  }`}>
+                    {saveMessage.text}
+                  </div>
+                )}
+
                 {/* Action Buttons */}
-                <div className="flex justify-end space-x-3">
-                  <button className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors">
+                <div className="flex justify-end space-x-4">
+                  <button 
+                    onClick={handleReset}
+                    disabled={isSaving}
+                    className="px-6 py-3 border-2 border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium disabled:opacity-50"
+                  >
                     Reset
                   </button>
-                  <button className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-                    Save Configuration
+                  <button 
+                    onClick={handleSaveConfiguration}
+                    disabled={isSaving}
+                    className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium disabled:opacity-50"
+                  >
+                    {isSaving ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    <span>{isSaving ? 'Saving...' : 'Save Configuration'}</span>
                   </button>
                 </div>
               </div>

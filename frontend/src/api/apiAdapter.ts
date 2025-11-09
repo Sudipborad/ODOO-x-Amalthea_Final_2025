@@ -1,5 +1,6 @@
 import axiosClient from './axiosClient';
 import { UserRole } from '../utils/roleUtils';
+import { cacheManager } from '../utils/cacheManager';
 
 // Types
 export interface User {
@@ -15,7 +16,7 @@ export interface Employee extends User {
   hireDate: string;
   salary: number;
   phone: string;
-  address: string;
+  address: string;                      
 }
 
 export interface TimeOffRequest {
@@ -58,9 +59,35 @@ export const getEmployee = async (id: number): Promise<Employee> => {
 export const createEmployee = async (employeeData: { email: string; temporaryPassword: string; role: string }): Promise<any> => {
   try {
     const response = await axiosClient.post('/users/create', employeeData);
+    cacheManager.invalidateAll();
     return response.data;
   } catch (error: any) {
     throw new Error(error.response?.data?.error || error.message || 'Failed to create employee');
+  }
+};
+
+export const updateEmployeeProfile = async (employeeId: number, profileData: any): Promise<Employee> => {
+  try {
+    const response = await axiosClient.put(`/employees/${employeeId}/profile`, profileData);
+    cacheManager.invalidateAll();
+    return response.data;
+  } catch (error: any) {
+    console.error('Update profile error:', error.response?.data);
+    const errorMessage = error.response?.data?.error || 
+                         error.response?.data?.details || 
+                         error.response?.data?.message ||
+                         error.message || 
+                         'Failed to update employee profile';
+    throw new Error(errorMessage);
+  }
+};
+
+export const getEmployeeAuditLogs = async (employeeId: number, page = 1, limit = 20): Promise<any> => {
+  try {
+    const response = await axiosClient.get(`/employees/${employeeId}/audit-logs?page=${page}&limit=${limit}`);
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.error || error.message || 'Failed to fetch employee audit logs');
   }
 };
 
@@ -84,16 +111,20 @@ export const getTodayAttendance = async (): Promise<any> => {
 
 export const clockIn = async (): Promise<void> => {
   await axiosClient.post('/attendance/clock-in');
+  console.log('API: Clock-in successful, invalidating cache');
+  cacheManager.invalidateAll();
 };
 
 export const clockOut = async (): Promise<void> => {
   await axiosClient.post('/attendance/clock-out');
+  console.log('API: Clock-out successful, invalidating cache');
+  cacheManager.invalidateAll();
 };
 
 // Time Off
 export const getTimeOffRequests = async (): Promise<TimeOffRequest[]> => {
   const response = await axiosClient.get('/timeoff');
-  return response.data.timeOffRequests || [];
+  return response.data.timeOffRequests || response.data || [];
 };
 
 export const submitTimeOffRequest = async (request: Omit<TimeOffRequest, 'id' | 'status' | 'submittedDate'>): Promise<void> => {
@@ -116,14 +147,19 @@ export const submitTimeOffRequest = async (request: Omit<TimeOffRequest, 'id' | 
     reason: request.reason
   };
   await axiosClient.post('/timeoff', backendRequest);
+  cacheManager.invalidateAll();
 };
 
 export const approveTimeOffRequest = async (id: number): Promise<void> => {
   await axiosClient.put(`/timeoff/${id}/approve`);
+  console.log('API: Time-off approved, invalidating cache');
+  cacheManager.invalidateAll();
 };
 
 export const rejectTimeOffRequest = async (id: number): Promise<void> => {
   await axiosClient.put(`/timeoff/${id}/reject`);
+  console.log('API: Time-off rejected, invalidating cache');
+  cacheManager.invalidateAll();
 };
 
 // Payroll
@@ -151,6 +187,7 @@ export const finalizePayroll = async (periodStart: string, periodEnd: string, pa
     periodEnd, 
     payrollData 
   });
+  cacheManager.invalidateAll();
   return response.data;
 };
 
@@ -159,6 +196,11 @@ export const getPayslips = async (employeeId?: number): Promise<any[]> => {
   const url = employeeId ? `/payslips?employeeId=${employeeId}` : '/payslips';
   const response = await axiosClient.get(url);
   return response.data.payslips || [];
+};
+
+export const getPayslip = async (id: number): Promise<any> => {
+  const response = await axiosClient.get(`/payslips/${id}`);
+  return response.data;
 };
 
 export const downloadPayslip = async (payslipId: number): Promise<Blob> => {

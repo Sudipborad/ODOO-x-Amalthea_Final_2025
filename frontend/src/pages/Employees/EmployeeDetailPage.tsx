@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { FormField } from "../../components/ui/FormField";
+import { EmployeeAuditLogs } from "../../components/ui/EmployeeAuditLogs";
 import { useFetch } from "../../hooks/useFetch";
+import { useAuth } from "../../context/AuthContext";
 
 interface Employee {
   id: string;
@@ -17,19 +19,15 @@ interface Employee {
   avatar?: string;
 }
 
+import { getEmployee } from "../../api/apiAdapter";
+
 const getEmployeeById = async (id: string) => {
-  const token = localStorage.getItem("token");
-  const response = await fetch(`/api/users/${id}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!response.ok) throw new Error("Failed to fetch employee");
-  return response.json();
+  return await getEmployee(parseInt(id));
 };
 
 export const EmployeeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("profile");
   const {
     data: employee,
@@ -67,13 +65,23 @@ export const EmployeeDetailPage: React.FC = () => {
     { id: "payroll", label: "Payroll" },
     { id: "reports", label: "Reports" },
     { id: "settings", label: "Settings" },
+    ...(user?.role === "ADMIN" || user?.role === "HR"
+      ? [{ id: "audit", label: "Change History" }]
+      : []),
   ];
 
   const salaryComponents: {
     name: string;
     amount: number;
     percentage: number;
-  }[] = [];
+  }[] = [
+    { name: "Basic Salary", amount: 37500, percentage: 50 },
+    { name: "House Rent Allowance", amount: 15000, percentage: 20 },
+    { name: "Transport Allowance", amount: 3750, percentage: 5 },
+    { name: "Performance Bonus", amount: 6250, percentage: 8.33 },
+    { name: "Leave Travel Allowance", amount: 6250, percentage: 8.33 },
+    { name: "Medical Allowance", amount: 6250, percentage: 8.33 },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -99,19 +107,13 @@ export const EmployeeDetailPage: React.FC = () => {
                     {employee.name.charAt(0)}
                   </span>
                 </div>
-                <h3 className="font-semibold text-gray-900">{employee.name}</h3>
-                <p className="text-sm text-gray-600">{employee.role}</p>
+                <h3 className="font-semibold text-gray-900">{employee.user?.name || employee.name}</h3>
+                <p className="text-sm text-gray-600">{employee.user?.role || employee.role}</p>
                 <p className="text-xs text-gray-500">
-                  ID: {employee.userId || "Not assigned"}
+                  ID: {employee.employeeCode || employee.id || "Not assigned"}
                 </p>
-                <span
-                  className={`inline-flex px-2 py-1 text-xs font-medium rounded-full mt-2 ${
-                    employee.isVerified
-                      ? "bg-green-100 text-green-800"
-                      : "bg-yellow-100 text-yellow-800"
-                  }`}
-                >
-                  {employee.isVerified ? "Active" : "Pending"}
+                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full mt-2 bg-green-100 text-green-800">
+                  Active
                 </span>
               </div>
 
@@ -156,13 +158,13 @@ export const EmployeeDetailPage: React.FC = () => {
                       <div className="space-y-4">
                         <FormField
                           label="Full Name"
-                          value={employee.name}
+                          value={employee.user?.name || employee.name || "Not provided"}
                           onChange={() => {}}
                         />
                         <FormField
                           label="Email"
                           type="email"
-                          value={employee.email}
+                          value={employee.user?.email || employee.email || "Not provided"}
                           onChange={() => {}}
                         />
                         <FormField
@@ -171,9 +173,52 @@ export const EmployeeDetailPage: React.FC = () => {
                           onChange={() => {}}
                         />
                         <FormField
-                          label="Address"
+                          label="Personal Email"
+                          value={employee.personalEmail || "Not provided"}
+                          onChange={() => {}}
+                        />
+                        <FormField
+                          label="Date of Birth"
+                          type="date"
+                          value={
+                            employee.dateOfBirth
+                              ? new Date(employee.dateOfBirth)
+                                  .toISOString()
+                                  .split("T")[0]
+                              : ""
+                          }
+                          onChange={() => {}}
+                        />
+                        <FormField
+                          label="Blood Group"
+                          value={employee.bloodGroup || "Not provided"}
+                          onChange={() => {}}
+                        />
+                        <FormField
+                          label="Marital Status"
+                          value={employee.maritalStatus || "Not provided"}
+                          onChange={() => {}}
+                        />
+                        <FormField
+                          label="Emergency Contact Name"
+                          value={employee.emergencyContactName || "Not provided"}
+                          onChange={() => {}}
+                        />
+                        <FormField
+                          label="Emergency Contact Phone"
+                          value={employee.emergencyContactPhone || "Not provided"}
+                          onChange={() => {}}
+                        />
+                        <FormField
+                          label="Current Address"
                           type="textarea"
-                          value="123 Main Street, City, State 12345"
+                          value={employee.address || "Not provided"}
+                          onChange={() => {}}
+                        />
+                        <FormField
+                          label="Permanent Address"
+                          type="textarea"
+                          value={employee.permanentAddress || "Not provided"}
                           onChange={() => {}}
                         />
                       </div>
@@ -187,29 +232,25 @@ export const EmployeeDetailPage: React.FC = () => {
                       <div className="space-y-4">
                         <FormField
                           label="Employee ID"
-                          value={employee.userId || "Not assigned"}
+                          value={employee.employeeCode || employee.id || "Not assigned"}
                           onChange={() => {}}
                         />
                         <FormField
                           label="Department"
-                          value={
-                            employee.employee?.department || "Not assigned"
-                          }
+                          value={employee.department || "Not assigned"}
                           onChange={() => {}}
                         />
                         <FormField
                           label="Designation"
-                          value={
-                            employee.employee?.designation || "Not assigned"
-                          }
+                          value={employee.designation || "Not assigned"}
                           onChange={() => {}}
                         />
                         <FormField
                           label="Join Date"
                           type="date"
                           value={
-                            employee.employee?.joinDate
-                              ? new Date(employee.employee.joinDate)
+                            employee.joinDate
+                              ? new Date(employee.joinDate)
                                   .toISOString()
                                   .split("T")[0]
                               : ""
@@ -218,11 +259,7 @@ export const EmployeeDetailPage: React.FC = () => {
                         />
                         <FormField
                           label="Status"
-                          value={
-                            employee.isVerified
-                              ? "Active"
-                              : "Pending Verification"
-                          }
+                          value="Active"
                           onChange={() => {}}
                         />
                       </div>
@@ -319,16 +356,16 @@ export const EmployeeDetailPage: React.FC = () => {
                           <div>
                             <p>
                               <strong>Monthly Wage:</strong> ₹
-                              {employee.employee?.baseSalary
-                                ? employee.employee.baseSalary.toLocaleString()
+                              {employee.baseSalary
+                                ? Math.round(
+                                    employee.baseSalary / 12
+                                  ).toLocaleString()
                                 : "Not set"}
                             </p>
                             <p>
                               <strong>Yearly Wage:</strong> ₹
-                              {employee.employee?.baseSalary
-                                ? (
-                                    employee.employee.baseSalary * 12
-                                  ).toLocaleString()
+                              {employee.baseSalary
+                                ? employee.baseSalary.toLocaleString()
                                 : "Not set"}
                             </p>
                           </div>
@@ -337,7 +374,14 @@ export const EmployeeDetailPage: React.FC = () => {
                               <strong>Pay Period:</strong> Monthly
                             </p>
                             <p>
-                              <strong>Bank Details:</strong> _______________
+                              <strong>Bank:</strong>{" "}
+                              {employee.bankName || "Not provided"} -{" "}
+                              {employee.bankBranch || "Not provided"}
+                            </p>
+                            <p>
+                              <strong>Account:</strong>{" "}
+                              {employee.bankAccountNumber || employee.accountNumber ||
+                                "Not provided"}
                             </p>
                           </div>
                         </div>
@@ -404,16 +448,22 @@ export const EmployeeDetailPage: React.FC = () => {
                   </div>
                 )}
 
-                {activeTab !== "profile" && activeTab !== "payroll" && (
-                  <div className="text-center py-12">
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      {tabs.find((t) => t.id === activeTab)?.label}
-                    </h3>
-                    <p className="text-gray-600">
-                      This section is under development.
-                    </p>
-                  </div>
+                {activeTab === "audit" && (
+                  <EmployeeAuditLogs employeeId={parseInt(id!)} />
                 )}
+
+                {activeTab !== "profile" &&
+                  activeTab !== "payroll" &&
+                  activeTab !== "audit" && (
+                    <div className="text-center py-12">
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        {tabs.find((t) => t.id === activeTab)?.label}
+                      </h3>
+                      <p className="text-gray-600">
+                        This section is under development.
+                      </p>
+                    </div>
+                  )}
 
                 {/* Action Buttons */}
                 <div className="mt-8 flex justify-end space-x-3 pt-6 border-t border-gray-200">

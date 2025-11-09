@@ -58,24 +58,59 @@ model Employee {
   // Personal Info
   dateOfBirth               DateTime?
   address                   String?
+  permanentAddress          String?
+  city                      String?
+  state                     String?
+  zipCode                   String?
+  country                   String?     @default("India")
   gender                    String?
-  nationality               String?
+  nationality               String?     @default("Indian")
   maritalStatus             String?
   phone                     String?
-  alternatePhone             String?
+  alternatePhone            String?
+  personalEmail             String?
   emergencyContactName      String?
-  emergencyContactPhone      String?
-  emergencyContactRelation   String?
+  emergencyContactPhone     String?
+  emergencyContactRelation  String?
+  emergencyContactAddress   String?
+  // Government IDs
   aadharNumber              String?
   panNumber                 String?
+  passportNumber            String?
+  drivingLicenseNumber      String?
+  voterIdNumber             String?
+  // Professional Info
+  workLocation              String?
+  reportingManager          String?
+  workType                  String?     // FULL_TIME, PART_TIME, CONTRACT, INTERN
+  probationPeriod           Int?        // in months
+  confirmationDate          DateTime?
+  previousCompany           String?
+  previousDesignation       String?
+  totalExperience           Float?      // in years
   // Bank Details
   bankAccountNumber         String?
   bankName                  String?
+  bankBranch                String?
   ifscCode                  String?
   accountHolderName         String?
-  accountType               String? // SAVINGS, CURRENT, etc.
-  // Files
+  accountType               String?     // SAVINGS, CURRENT, etc.
+  upiId                     String?
+  // Additional Financial
+  pfNumber                  String?
+  uanNumber                 String?     // Universal Account Number
+  esiNumber                 String?     // Employee State Insurance
+  // Files & Documents
   resumePath                String?
+  profilePicturePath        String?
+  aadharFilePath            String?
+  panFilePath               String?
+  bankPassbookPath          String?
+  // Health & Benefits
+  bloodGroup                String?
+  medicalConditions         String?
+  insuranceNominee          String?
+  insuranceNomineeRelation  String?
   // Relations
   manager                   Employee?   @relation("EmployeeManager", fields: [managerId], references: [id])
   subordinates              Employee[]  @relation("EmployeeManager")

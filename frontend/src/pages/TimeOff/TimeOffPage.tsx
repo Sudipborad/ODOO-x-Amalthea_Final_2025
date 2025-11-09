@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Table } from "../../components/ui/Table";
+import { Calendar } from "../../components/ui/Calendar";
 import { Modal } from "../../components/ui/Modal";
 import { FormField } from "../../components/ui/FormField";
 import { Notification } from "../../components/ui/Notification";
@@ -31,6 +32,7 @@ export const TimeOffPage: React.FC = () => {
   );
   const [actionType, setActionType] = useState<"approve" | "reject">("approve");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewType, setViewType] = useState<"list" | "calendar">("list");
 
   const [formData, setFormData] = useState({
     type: "",
@@ -163,13 +165,13 @@ export const TimeOffPage: React.FC = () => {
     }) || [];
 
   const columns = [
-    {
+    ...(canManageTimeOff(user?.role || "EMPLOYEE") ? [{
       key: "employeeName",
       header: "Employee",
       render: (value: any, row: any) => {
         return row.employee?.user?.name || value || "Unknown";
       },
-    },
+    }] : []),
     {
       key: "type",
       header: "Type",
@@ -275,19 +277,9 @@ export const TimeOffPage: React.FC = () => {
     },
   ];
 
-  // Filter requests based on user role
-  // Backend already filters for employees, but we do an additional client-side filter for safety
-  const userEmployeeId =
-    (user as any)?.employee?.id || (user as any)?.employeeId;
-
-  const filteredRequests = canManageTimeOff(user?.role || "EMPLOYEE")
-    ? transformedRequests
-    : transformedRequests.filter((request) => {
-        const requestEmployeeId = request.employeeId || request.employee?.id;
-        // Convert both to numbers for comparison to handle type mismatches
-        const matches = Number(requestEmployeeId) === Number(userEmployeeId);
-        return matches;
-      });
+  // For employees, backend already filters correctly, so we don't need additional filtering
+  // For managers, show all requests
+  const filteredRequests = transformedRequests;
 
   if (loading) {
     return (
@@ -329,6 +321,28 @@ export const TimeOffPage: React.FC = () => {
               {isManager ? "Reject & Approve Sections" : "My Time Off Requests"}
             </h1>
             <div className="flex items-center space-x-4">
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setViewType("list")}
+                  className={`px-3 py-1 rounded text-sm ${
+                    viewType === "list"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-200"
+                  }`}
+                >
+                  List
+                </button>
+                <button
+                  onClick={() => setViewType("calendar")}
+                  className={`px-3 py-1 rounded text-sm ${
+                    viewType === "calendar"
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-200"
+                  }`}
+                >
+                  Calendar
+                </button>
+              </div>
               {!isManager && (
                 <button
                   onClick={() => setShowRequestModal(true)}
@@ -355,15 +369,58 @@ export const TimeOffPage: React.FC = () => {
             </div>
           )}
 
-          <div className="overflow-x-auto">
-            {filteredRequests && filteredRequests.length > 0 ? (
-              <Table data={filteredRequests} columns={columns} />
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-gray-500">No time off requests found</p>
-              </div>
-            )}
-          </div>
+          {viewType === "list" ? (
+            <div className="overflow-x-auto">
+              {filteredRequests && filteredRequests.length > 0 ? (
+                <Table data={filteredRequests} columns={columns} />
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Time Off Requests</h3>
+                  <p className="text-gray-500 mb-4">
+                    {isManager 
+                      ? "No time off requests have been submitted yet." 
+                      : "You haven't submitted any time off requests yet."}
+                  </p>
+                  {!isManager && (
+                    <button
+                      onClick={() => setShowRequestModal(true)}
+                      className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md"
+                    >
+                      Submit Your First Request
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <Calendar
+              events={(filteredRequests || []).map((request: any) => ({
+                id: request.id,
+                date: request.startDate,
+                title: `${request.employeeName || "Unknown"} - ${
+                  request.type || "Time Off"
+                }`,
+                subtitle: `${formatDate(request.startDate)} to ${formatDate(
+                  request.endDate
+                )}`,
+                status: request.status,
+              }))}
+              onEventClick={(event) => {
+                const request = filteredRequests?.find(
+                  (r: any) => r.id === event.id
+                );
+                if (request) {
+                  setSelectedRequest(request);
+                  setShowActionModal(true);
+                }
+              }}
+            />
+          )}
         </div>
       </div>
 

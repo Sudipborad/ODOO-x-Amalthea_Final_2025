@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import { Table } from "../../components/ui/Table";
+import { Calendar } from "../../components/ui/Calendar";
+import { MonthlyAttendanceCalendar } from "../../components/ui/MonthlyAttendanceCalendar";
+import { SingleEmployeeCalendar } from "../../components/ui/SingleEmployeeCalendar";
 import { Notification } from "../../components/ui/Notification";
 import { useFetch } from "../../hooks/useFetch";
 import {
@@ -7,6 +10,7 @@ import {
   clockIn,
   clockOut,
   getTodayAttendance,
+  getAllEmployees,
 } from "../../api/apiAdapter";
 import { useAuth } from "../../context/AuthContext";
 import { formatDate, formatTime } from "../../utils/format";
@@ -24,6 +28,13 @@ export const AttendancePage: React.FC = () => {
   };
 
   const [selectedDate, setSelectedDate] = useState("");
+  const [viewType, setViewType] = useState<"list" | "calendar" | "monthly">(
+    "list"
+  );
+  const [isClocking, setIsClocking] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(
+    null
+  );
 
   const {
     data: attendance,
@@ -33,24 +44,52 @@ export const AttendancePage: React.FC = () => {
   } = useFetch(() => {
     // If a specific date is selected, use that date range
     if (selectedDate) {
-      return getAttendance({ from: selectedDate, to: selectedDate, limit: 1000 });
+      return getAttendance({
+        from: selectedDate,
+        to: selectedDate,
+        limit: 1000,
+      });
     }
-    
-    // Otherwise, fetch last 30 days of attendance records
+
+    // For monthly view, get current month's data; otherwise get last 30 days
     const today = new Date();
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    
-    const fromDate = thirtyDaysAgo.toISOString().split('T')[0];
-    const toDate = today.toISOString().split('T')[0];
-    
-    return getAttendance({ from: fromDate, to: toDate, limit: 1000 });
-  }, [selectedDate]);
+    let fromDate, toDate;
+
+    if (viewType === "monthly") {
+      // Get current month's data
+      const firstDayOfMonth = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        1
+      );
+      const lastDayOfMonth = new Date(
+        today.getFullYear(),
+        today.getMonth() + 1,
+        0
+      );
+      fromDate = firstDayOfMonth.toISOString().split("T")[0];
+      toDate = lastDayOfMonth.toISOString().split("T")[0];
+    } else {
+      // Get last 30 days
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      fromDate = thirtyDaysAgo.toISOString().split("T")[0];
+      toDate = today.toISOString().split("T")[0];
+    }
+
+    const params: any = { from: fromDate, to: toDate, limit: 1000 };
+    if (selectedEmployeeId) {
+      params.employeeId = selectedEmployeeId;
+    }
+
+    return getAttendance(params);
+  }, [selectedDate, viewType, selectedEmployeeId]);
 
   const { data: todayAttendance, refetch: refetchToday } =
     useFetch(getTodayAttendance);
-  const [isClocking, setIsClocking] = useState(false);
-  const [viewType, setViewType] = useState<"list" | "calendar">("list");
+
+  // Fetch employees for the dropdown filter
+  const { data: employees } = useFetch(getAllEmployees);
   const [notification, setNotification] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -69,9 +108,9 @@ export const AttendancePage: React.FC = () => {
     try {
       await clockIn();
       showNotification("Clocked in successfully!", "success");
-      setTimeout(() => {
-        refetchToday();
-      }, 500);
+      // Immediately refresh data
+      refetchToday();
+      refetch();
     } catch (error: any) {
       showNotification(
         error.response?.data?.error || "Failed to clock in",
@@ -87,9 +126,9 @@ export const AttendancePage: React.FC = () => {
     try {
       await clockOut();
       showNotification("Clocked out successfully!", "success");
-      setTimeout(() => {
-        refetchToday();
-      }, 500);
+      // Immediately refresh data
+      refetchToday();
+      refetch();
     } catch (error: any) {
       showNotification(
         error.response?.data?.error || "Failed to clock out",
@@ -210,10 +249,10 @@ export const AttendancePage: React.FC = () => {
         <div className="p-6">
           {/* Controls */}
           <div className="flex justify-between items-center mb-6">
-            <div className="flex space-x-4">
+            <div className="flex space-x-2">
               <button
                 onClick={() => setViewType("list")}
-                className={`px-4 py-2 rounded ${
+                className={`px-3 py-1 rounded text-sm ${
                   viewType === "list" ? "bg-blue-600 text-white" : "bg-gray-200"
                 }`}
               >
@@ -221,13 +260,23 @@ export const AttendancePage: React.FC = () => {
               </button>
               <button
                 onClick={() => setViewType("calendar")}
-                className={`px-4 py-2 rounded ${
+                className={`px-3 py-1 rounded text-sm ${
                   viewType === "calendar"
                     ? "bg-blue-600 text-white"
                     : "bg-gray-200"
                 }`}
               >
                 Calendar
+              </button>
+              <button
+                onClick={() => setViewType("monthly")}
+                className={`px-3 py-1 rounded text-sm ${
+                  viewType === "monthly"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200"
+                }`}
+              >
+                Monthly
               </button>
             </div>
 
@@ -244,14 +293,38 @@ export const AttendancePage: React.FC = () => {
                   onClick={() => setSelectedDate("")}
                   className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded"
                 >
-                  Show All
+                  Show All Dates
                 </button>
               )}
-              <select className="px-3 py-2 border border-gray-300 rounded">
-                <option>Day</option>
-                <option>Week</option>
-                <option>Month</option>
+
+              {/* Employee Filter */}
+              <select
+                value={selectedEmployeeId || ""}
+                onChange={(e) =>
+                  setSelectedEmployeeId(
+                    e.target.value ? Number(e.target.value) : null
+                  )
+                }
+                className="px-3 py-2 border border-gray-300 rounded"
+              >
+                <option value="">All Employees</option>
+                {employees?.map((employee: any) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.user?.name ||
+                      employee.name ||
+                      `Employee ${employee.id}`}
+                  </option>
+                ))}
               </select>
+
+              {selectedEmployeeId && (
+                <button
+                  onClick={() => setSelectedEmployeeId(null)}
+                  className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded"
+                >
+                  Show All Employees
+                </button>
+              )}
             </div>
           </div>
 
@@ -305,10 +378,98 @@ export const AttendancePage: React.FC = () => {
             </div>
           )}
 
-          {/* Attendance Table */}
-          <div className="overflow-x-auto">
-            <Table data={filteredAttendance || []} columns={columns} />
-          </div>
+          {/* Active Filters Display */}
+          {(selectedDate || selectedEmployeeId) && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center space-x-4 text-sm">
+                <span className="font-medium text-blue-800">
+                  Active Filters:
+                </span>
+                {selectedDate && (
+                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                    Date: {formatDate(selectedDate)}
+                  </span>
+                )}
+                {selectedEmployeeId && (
+                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                    Employee:{" "}
+                    {employees?.find(
+                      (emp: any) => emp.id === selectedEmployeeId
+                    )?.user?.name || "Unknown"}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Attendance View */}
+          {viewType === "list" ? (
+            <div className="overflow-x-auto">
+              <Table data={filteredAttendance || []} columns={columns} />
+            </div>
+          ) : viewType === "calendar" ? (
+            <Calendar
+              events={(filteredAttendance || []).map((record: any) => ({
+                id: record.id,
+                date: record.date,
+                title: record.employee?.user?.name || "Unknown",
+                subtitle: record.checkIn
+                  ? `${formatTime(record.checkIn)} - ${
+                      record.checkOut ? formatTime(record.checkOut) : "Working"
+                    }`
+                  : "No clock in",
+                status: record.status,
+              }))}
+              onDateClick={(date) => setSelectedDate(date)}
+              selectedDate={selectedDate}
+            />
+          ) : selectedEmployeeId && viewType === "monthly" ? (
+            <SingleEmployeeCalendar
+              attendanceData={(filteredAttendance || []).map((record: any) => ({
+                id: record.id,
+                employeeId: record.employeeId,
+                employeeName: record.employee?.user?.name || "Unknown",
+                department: record.employee?.department || "General",
+                date: record.date,
+                status: record.status,
+                checkIn: record.checkIn,
+                checkOut: record.checkOut,
+                totalHours: record.totalHours,
+              }))}
+              employeeName={
+                employees?.find((emp: any) => emp.id === selectedEmployeeId)
+                  ?.user?.name ||
+                employees?.find((emp: any) => emp.id === selectedEmployeeId)
+                  ?.name ||
+                "Unknown Employee"
+              }
+              employeeDepartment={
+                employees?.find((emp: any) => emp.id === selectedEmployeeId)
+                  ?.department || "General"
+              }
+              onDateClick={(date) => setSelectedDate(date)}
+            />
+          ) : (
+            <MonthlyAttendanceCalendar
+              attendanceData={(filteredAttendance || []).map((record: any) => ({
+                id: record.id,
+                employeeId: record.employeeId,
+                employeeName: record.employee?.user?.name || "Unknown",
+                department: record.employee?.department || "General",
+                empStatus: "Active",
+                date: record.date,
+                status: record.status,
+                checkIn: record.checkIn,
+                checkOut: record.checkOut,
+              }))}
+              onDateClick={(date, employeeId) => {
+                setSelectedDate(date);
+                if (!selectedEmployeeId) {
+                  setSelectedEmployeeId(employeeId);
+                }
+              }}
+            />
+          )}
         </div>
       </div>
 

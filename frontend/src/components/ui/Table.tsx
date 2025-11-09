@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 interface Column<T> {
   key: keyof T | string;
@@ -15,7 +15,7 @@ interface TableProps<T> {
 export const Table = <T extends Record<string, any>>({
   data,
   columns,
-  className = '',
+  className = "",
 }: TableProps<T>) => {
   return (
     <div className={`overflow-x-auto ${className}`}>
@@ -36,10 +36,23 @@ export const Table = <T extends Record<string, any>>({
           {data.map((row, rowIndex) => (
             <tr key={rowIndex} className="hover:bg-gray-50">
               {columns.map((column, colIndex) => (
-                <td key={colIndex} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {column.render
-                    ? column.render(row[column.key as keyof T], row)
-                    : row[column.key as keyof T]}
+                <td
+                  key={colIndex}
+                  className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                >
+                  {(() => {
+                    try {
+                      return column.render
+                        ? column.render(row[column.key as keyof T], row)
+                        : row[column.key as keyof T] || "-";
+                    } catch (error) {
+                      console.error(
+                        `Error rendering column ${column.key}:`,
+                        error
+                      );
+                      return "-";
+                    }
+                  })()}
                 </td>
               ))}
             </tr>
@@ -47,9 +60,7 @@ export const Table = <T extends Record<string, any>>({
         </tbody>
       </table>
       {data.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          No data available
-        </div>
+        <div className="text-center py-8 text-gray-500">No data available</div>
       )}
     </div>
   );

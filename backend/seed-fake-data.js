@@ -83,10 +83,84 @@ async function main() {
         designation: data.designation,
         baseSalary: data.salary,
         joinDate: new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1),
-        phone: `+1-555-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`,
-        address: `${Math.floor(Math.random() * 999) + 1} Main St, City, State ${String(Math.floor(Math.random() * 90000) + 10000)}`,
-        emergencyContactName: `Emergency Contact ${i + 1}`,
-        emergencyContactPhone: `+1-555-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`
+        // Personal Info
+        phone: `+91 ${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+        dateOfBirth: new Date(1985 + Math.floor(Math.random() * 15), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1, 0, 0, 0, 0),
+        address: [
+          '123 Tech Park, Bangalore, Karnataka 560001',
+          '456 IT Hub, Hyderabad, Telangana 500032', 
+          '789 Software City, Pune, Maharashtra 411001',
+          '321 Cyber City, Gurgaon, Haryana 122002',
+          '654 Innovation Park, Chennai, Tamil Nadu 600001',
+          '987 Digital Valley, Mumbai, Maharashtra 400001',
+          '147 Tech Tower, Noida, Uttar Pradesh 201301',
+          '258 IT Plaza, Kochi, Kerala 682001'
+        ][i % 8],
+        permanentAddress: [
+          '12 Gandhi Nagar, Delhi 110001',
+          '34 MG Road, Bangalore 560001',
+          '56 Park Street, Kolkata 700016', 
+          '78 Marine Drive, Mumbai 400002',
+          '90 Anna Salai, Chennai 600002',
+          '11 Sector 17, Chandigarh 160017',
+          '22 Civil Lines, Jaipur 302006',
+          '33 Station Road, Lucknow 226001'
+        ][i % 8],
+        city: ['Bangalore', 'Hyderabad', 'Pune', 'Gurgaon', 'Chennai', 'Mumbai', 'Noida', 'Kochi'][i % 8],
+        state: ['Karnataka', 'Telangana', 'Maharashtra', 'Haryana', 'Tamil Nadu', 'Maharashtra', 'Uttar Pradesh', 'Kerala'][i % 8],
+        zipCode: ['560001', '500032', '411001', '122002', '600001', '400001', '201301', '682001'][i % 8],
+        gender: ['Male', 'Female'][Math.floor(Math.random() * 2)],
+        maritalStatus: ['Single', 'Married', 'Divorced'][Math.floor(Math.random() * 3)],
+        alternatePhone: `+91 ${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+        personalEmail: `${data.name.toLowerCase().replace(' ', '.')}@gmail.com`,
+        // Emergency Contact
+        emergencyContactName: [
+          'Rajesh Kumar', 'Priya Sharma', 'Amit Patel', 'Sunita Singh',
+          'Vikram Gupta', 'Meera Reddy', 'Arjun Nair', 'Kavya Iyer'
+        ][i % 8],
+        emergencyContactPhone: `+91 ${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+        emergencyContactRelation: ['Father', 'Mother', 'Spouse', 'Brother', 'Sister'][Math.floor(Math.random() * 5)],
+        emergencyContactAddress: [
+          '12 Gandhi Nagar, Delhi 110001',
+          '34 MG Road, Bangalore 560001', 
+          '56 Park Street, Kolkata 700016',
+          '78 Marine Drive, Mumbai 400002'
+        ][i % 4],
+        // Government IDs
+        aadharNumber: `${Math.floor(Math.random() * 9000) + 1000} ${Math.floor(Math.random() * 9000) + 1000} ${Math.floor(Math.random() * 9000) + 1000}`,
+        panNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`,
+        // Professional Info
+        workLocation: ['Bangalore Office', 'Hyderabad Office', 'Pune Office', 'Mumbai Office'][Math.floor(Math.random() * 4)],
+        reportingManager: i > 0 ? userData[Math.floor(Math.random() * i)].name : null,
+        workType: ['FULL_TIME', 'PART_TIME', 'CONTRACT'][Math.floor(Math.random() * 3)],
+        probationPeriod: [3, 6, 12][Math.floor(Math.random() * 3)],
+        confirmationDate: new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1),
+        previousCompany: [
+          'Infosys', 'TCS', 'Wipro', 'Accenture', 'IBM', 'Microsoft', 'Google', 'Amazon'
+        ][Math.floor(Math.random() * 8)],
+        previousDesignation: [
+          'Software Engineer', 'Senior Developer', 'Team Lead', 'Project Manager'
+        ][Math.floor(Math.random() * 4)],
+        totalExperience: Math.floor(Math.random() * 10) + 1,
+        // Bank Details
+        bankAccountNumber: `${Math.floor(Math.random() * 90000000000000) + 10000000000000}`,
+        bankName: ['HDFC Bank', 'ICICI Bank', 'SBI', 'Axis Bank', 'Kotak Bank'][Math.floor(Math.random() * 5)],
+        bankBranch: ['MG Road Branch', 'Koramangala Branch', 'Whitefield Branch'][Math.floor(Math.random() * 3)],
+        ifscCode: ['HDFC0000001', 'ICIC0000001', 'SBIN0000001', 'UTIB0000001', 'KKBK0000001'][Math.floor(Math.random() * 5)],
+        accountHolderName: data.name,
+        accountType: ['SAVINGS', 'CURRENT'][Math.floor(Math.random() * 2)],
+        upiId: `${data.name.toLowerCase().replace(' ', '.')}@paytm`,
+        // Additional Financial
+        pfNumber: `KA/BGE/${String(Math.floor(Math.random() * 900000) + 100000)}/${String(Math.floor(Math.random() * 900) + 100)}`,
+        uanNumber: `${Math.floor(Math.random() * 900000000000) + 100000000000}`,
+        esiNumber: `${Math.floor(Math.random() * 90000000000) + 10000000000}`,
+        // Health & Benefits
+        bloodGroup: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'][Math.floor(Math.random() * 8)],
+        medicalConditions: Math.random() < 0.3 ? ['Diabetes', 'Hypertension', 'Asthma'][Math.floor(Math.random() * 3)] : 'None',
+        insuranceNominee: [
+          'Rajesh Kumar', 'Priya Sharma', 'Amit Patel', 'Sunita Singh'
+        ][Math.floor(Math.random() * 4)],
+        insuranceNomineeRelation: ['Spouse', 'Father', 'Mother', 'Child'][Math.floor(Math.random() * 4)]
       }
     });
 
@@ -262,7 +336,7 @@ async function main() {
       });
     }
 
-    console.log(`✅ Created user and employee: ${data.name}`);
+    console.log(`✅ Created user and employee: ${data.name} with complete profile`);
   }
 
   // Create some notifications
@@ -304,12 +378,13 @@ async function main() {
   console.log('📊 Summary:');
   console.log(`- Company: ${company.name}`);
   console.log(`- Departments: ${departments.length}`);
-  console.log(`- Users/Employees: ${userData.length}`);
+  console.log(`- Users/Employees: ${userData.length} with complete profiles`);
   console.log(`- Attendance records: ~${userData.length * 20} (last 30 days)`);
   console.log(`- Time-off requests: ~${userData.length * 2}`);
   console.log(`- Payroll records: ${userData.length * 3} (last 3 months)`);
   console.log(`- Skills and certifications added`);
   console.log(`- Notifications: 10`);
+  console.log(`- Complete profile data: Personal, Professional, Bank, Government IDs`);
   console.log(`- Payrun totals updated`);
 }
 
